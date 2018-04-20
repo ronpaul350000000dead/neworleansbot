@@ -8,6 +8,7 @@
     "cat-facts": "^1.0.2",
     "discord.io": "woor/discord.io#gateway_v6",
     "dotenv": "^5.0.1",
+    "lame": "^1.2.4",
     "twss": "^0.1.6"
   }
 }

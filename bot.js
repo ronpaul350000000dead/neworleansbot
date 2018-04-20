@@ -2,10 +2,8 @@ var Discord = require('discord.io');
 var twss = require('twss');
 var catfact = require('cat-facts');
 var fs = require('fs');
-require('dotenv').config()
-
-console.log(process.env.TOKEN);
-
+var Lame = require('lame');
+require('dotenv').config();
 
 var bot = new Discord.Client({
     token: process.env.TOKEN,
@@ -37,6 +35,31 @@ bot.on('message', function(user, userID, channelID, message, event) {
         });
     };
 
+    /**
+     * Helper function to play a sound file:
+     */
+    let play = function(file) {
+        if (!voiceChannelID) {
+            say("Maybe you should join a voice channel first?");
+        } else {
+            bot.getAudioContext(voiceChannelID, function(err, stream) {
+                if (err) console.error(err);
+/*
+                fs.createReadStream("sounds/" + file).pipe(stream, { end: false });
+                stream.on("done", function() {});
+*/
+                var lame = new Lame.Decoder();
+                var input = fs.createReadStream("sounds/" + file);
+
+                lame.once("readable", function() {
+                    stream.send(lame);
+                });
+
+                input.pipe(lame);
+            });
+        }
+    };
+
 
     /**
      * Never respond to anything the bot itself says.
@@ -52,6 +75,7 @@ bot.on('message', function(user, userID, channelID, message, event) {
         say('http://i0.kym-cdn.com/entries/icons/original/000/001/030/DButt.jpg');
     }
     */
+
 
     /**
      * Actions based on random words said, without a command:
@@ -135,10 +159,6 @@ bot.on('message', function(user, userID, channelID, message, event) {
                         if (err) {
                             say("I couldn't join the voice channel.");
                             console.error(err);
-                        } else {
-                            events.on("speaking", function(userID, SSRC, speaking) {
-                                console.log("%s is " + (speakingBool ? "now speaking" : "done speaking"), userID);
-                            });
                         }
                     });
                 }
@@ -156,17 +176,16 @@ bot.on('message', function(user, userID, channelID, message, event) {
              * Play a fart sound on the current voice channel:
              */
             case 'fart':
-                if (!voiceChannelID) {
-                    say("Maybe you should join a voice channel first?");
-                } else {
-                    bot.getAudioContext(voiceChannelID, function(error, stream) {
-                        fs.createReadStream("fart.mp3").pipe(stream, { end: false });
-                        stream.on("done", function() {});
-                    });
-                }
+                play("fart.mp3");
+                break;
+
+            /**
+             * Play a rick roll on the current voice channel:
+             */
+            case 'rickroll':
+                play("rickroll.mp3");
                 break;
 
         }
     }
 });
-
