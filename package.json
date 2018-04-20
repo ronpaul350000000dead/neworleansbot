@@ -1,0 +1,13 @@
+{
+  "name": "NewOrleansBot",
+  "version": "1.0.0",
+  "main": "bot.js",
+  "author": "Elliott Carlson <x@sublim.nl>",
+  "license": "MIT",
+  "dependencies": {
+    "cat-facts": "^1.0.2",
+    "discord.io": "woor/discord.io#gateway_v6",
+    "dotenv": "^5.0.1",
+    "twss": "^0.1.6"
+  }
+}
