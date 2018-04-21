@@ -1,36 +1,40 @@
-var Discord = require('discord.io');
-var twss = require('twss');
-var catfact = require('cat-facts');
-var fs = require('fs');
-var Lame = require('lame');
+const Discord = require('discord.io');
+const twss = require('twss');
+const catfact = require('cat-facts');
+const fs = require('fs');
+const Lame = require('lame');
+const sleep = require('sleep').usleep;
+const sanitize = require("sanitize-filename");
+const path = require("path");
+const mongodb = require("mongo-db").default;
+const assert = require("assert");
 require('dotenv').config();
 
-var bot = new Discord.Client({
+const db = new mongodb(process.env.MONGO_URI, "neworleansbot", true);
+
+const bot = new Discord.Client({
     token: process.env.TOKEN,
     autorun: true
 });
 
-var quoteMemory = {};
-var voiceChannelID = null;
+let voiceChannelID = null;
 
 /***** CONFIGURATION START *****/
 
-let BotOwner = 'New Orleans Man';
-let BotCommandPrefix = ',/';
+const BotOwner = 'New Orleans Man';
+const BotCommandPrefix = ',/';
 
 /***** CONFIGURATION END *****/
 
-bot.on('ready', function() {
+bot.on('ready', () => {
     console.log('Logged in as %s - %s\n', bot.username, bot.id);
 });
 
-bot.on('message', function(user, userID, channelID, message, event) {
-    console.log(user);
-        
+bot.on('message', (user, userID, channelID, message, event) => {
     /**
-     * Helper function to send a response.
+     * Helper method to send a response.
      */
-    let say = function(msg) {
+    let say = (msg) => {
         bot.sendMessage({
             to: channelID,
             message: msg
@@ -38,27 +42,48 @@ bot.on('message', function(user, userID, channelID, message, event) {
     };
 
     /**
-     * Helper function to play a sound file:
+     * Helper method to play a sound file:
      */
-    let play = function(file) {
-        if (!voiceChannelID) {
-            say("Maybe you should join a voice channel first?");
-        } else {
-            bot.getAudioContext(voiceChannelID, function(err, stream) {
-                if (err) console.error(err);
-/*
-                fs.createReadStream("sounds/" + file).pipe(stream, { end: false });
-                stream.on("done", function() {});
-*/
-                var lame = new Lame.Decoder();
-                var input = fs.createReadStream("sounds/" + file);
+    let play = (file) => {
+        setVoiceChannel();
 
-                lame.once("readable", function() {
-                    stream.send(lame);
+        if (!voiceChannelID) {
+            say("Join a voice channel first, nimrod!");
+        } else {
+            bot.joinVoiceChannel(voiceChannelID, (err, events) => {
+                sleep(100);
+
+                bot.getAudioContext(voiceChannelID, (err, stream) => {
+                    if (err) {
+                        console.error(err);
+                    }
+
+                    let lame = new Lame.Decoder();
+                    let input = fs.createReadStream("sounds/" + file + ".mp3");
+
+                    lame.once("readable", () => {
+                        stream.send(lame);
+                    });
+
+                    input.pipe(lame);
                 });
 
-                input.pipe(lame);
             });
+        }
+    };
+
+    /**
+     * Helper method to find the voice channel the user is on:
+     */
+    let setVoiceChannel = () => {
+        for (let i in bot.servers) {
+            for (let j in bot.servers[i].members) {
+                if (j === userID) {
+                    if (bot.servers[i].members[j].voice_channel_id !== 'undefined') {
+                        voiceChannelID = bot.servers[i].members[j].voice_channel_id;
+                    }
+                }
+            }
         }
     };
 
@@ -83,8 +108,9 @@ bot.on('message', function(user, userID, channelID, message, event) {
      * Actions based on random words said, without a command:
      */
     if (!message.startsWith(BotCommandPrefix)) {
-        // Double entendre detection/That's What She Said:
-        if (twss.is(message)) {
+        // Double entendre detection/That's What She Said (only if more than 4
+        // words were typed to reduce false positives):
+        if (message.split(' ').length >= 3 && twss.is(message)) {
             say("THAT'S WHAT SHE SAID!");
         } else {
             // Only listen for "muhdick" from the bot owner:
@@ -113,33 +139,58 @@ bot.on('message', function(user, userID, channelID, message, event) {
                 break;
 
             /**
-             * Add a quote:
+             * Add a quote to the database:
              */
             case 'add':
                 let id = args[0];
                 let quote = args.splice(1);
-                quoteMemory[id] = quote.join(' ');
-                say("I'll remember that.");
+
+                db.findOne({
+                    [args[0]]: {
+                        $exists : true
+                    }
+                }).then((result) => {
+                    assert.notEqual(null, result);
+                    db.update(result, {
+                        [id]: quote
+                    }).then(() => {
+                        say(`Updated quote ${id}.`);
+                    });
+                }).catch((err) => {
+                    db.insert({
+                        [id]: quote
+                    }).then(() => {
+                        say(`Saved quote ${id}.`);
+                    });
+                });
                 break;
 
             /**
              * Display a random saved quote:
              */
             case 'random':
-                let keys = Object.keys(quoteMemory);
-                let randomQuote = quoteMemory[keys[keys.length * Math.random() << 0]];
-                say(randomQuote);
+                db.find().then((result) => {
+                    let randomQuote = result[Math.floor(Math.random() * result.length)];
+                    delete randomQuote['_id'];
+                    for (let prop in randomQuote) {
+                        say(`Quote ${prop}: ${randomQuote[prop].join(' ')}`);
+                    }
+                });
                 break;
 
             /**
              * Get a saved quote by the number:
              */
             case 'get':
-                if (args[0] in quoteMemory) {
-                    say(quoteMemory[args[0]]);
-                } else {
-                    say("That quote doesn't exist ya fuck!");
-                }
+                db.findOne({
+                    [args[0]]: {
+                        $exists : true
+                    }
+                }).then((result) => {
+                    say(`Quote ${args[0]}: ${result[args[0]].join(' ')}`);
+                }).catch((err) => {
+                    say(`That quote doesn't exist ya fuck!`);
+                });
                 break;
 
             /**
@@ -150,44 +201,33 @@ bot.on('message', function(user, userID, channelID, message, event) {
                 break;
 
             /**
-             * Join a voice channel:
+             * Play a sound to the current users voice channel:
              */
-            case 'join':
-                if (!args.length) {
-                    say("Join which voice channel??");
+            case 'play':
+                if (fs.existsSync("sounds/" + sanitize(args[0]) + '.mp3')) {
+                    play(sanitize(args[0]));
                 } else {
-                    voiceChannelID = args[0];
-                    bot.joinVoiceChannel(voiceChannelID, function(err, events) {
-                        if (err) {
-                            say("I couldn't join the voice channel.");
-                            console.error(err);
-                        }
-                    });
+                    say("Couldn't find that sound file?!");
                 }
                 break;
 
             /**
-             * Leave a voice channel:
+             * Get a list of available sound files to play:
              */
-            case 'leave':
-                bot.leaveVoiceChannel(voiceChannelID);
-                voiceChannelID = null;
-                break;
+            case 'sounds':
+                fs.readdir("sounds/", (err, files) => {
+                    files = files.map((file) => {
+                        return path.parse(file).name;
+                    });
 
-            /**
-             * Play a fart sound on the current voice channel:
-             */
-            case 'fart':
-                play("fart.mp3");
+                    if (files.length) {
+                        say("Here are the sound files I can play:");
+                        say(files.join("\t"));
+                    } else {
+                        say("I don't know any sweet sound bytes to play yet :(");
+                    }
+                });
                 break;
-
-            /**
-             * Play a rick roll on the current voice channel:
-             */
-            case 'rickroll':
-                play("rickroll.mp3");
-                break;
-
         }
     }
 });
