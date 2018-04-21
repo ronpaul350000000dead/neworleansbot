@@ -135,7 +135,7 @@ bot.on('message', (user, userID, channelID, message, event) => {
              * Display a random cat fact:
              */
             case 'fact':
-                say(catfact.random());
+                say(`Here's a cat fact! ${catfact.random()}`);
                 break;
 
             /**
