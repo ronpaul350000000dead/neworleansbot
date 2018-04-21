@@ -221,8 +221,7 @@ bot.on('message', (user, userID, channelID, message, event) => {
                     });
 
                     if (files.length) {
-                        say("Here are the sound files I can play:");
-                        say(files.join("\t"));
+                        say("Here are the sound files I can play:\n" + files.join("\t"));
                     } else {
                         say("I don't know any sweet sound bytes to play yet :(");
                     }
