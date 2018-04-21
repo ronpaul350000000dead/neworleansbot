@@ -25,6 +25,8 @@ bot.on('ready', function() {
 });
 
 bot.on('message', function(user, userID, channelID, message, event) {
+    console.log(user);
+        
     /**
      * Helper function to send a response.
      */
